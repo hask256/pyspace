@@ -1,4 +1,5 @@
 import pygame
+import time
 from random import randint
 
 from collections import namedtuple
@@ -129,6 +130,11 @@ pygame.key.set_repeat(5, 5)
 fires = pygame.sprite.RenderPlain()
 aliens = pygame.sprite.RenderPlain()
 
+
+
+points = 0
+start_time = time.time()
+
 while not end:
     clock.tick(30)
     screen.fill(black)
@@ -158,6 +164,8 @@ while not end:
 
                 fires.add(left_fire)
                 fires.add(right_fire)
+                points += 1
+                
 
             if event.key == pygame.K_q:
                 x = randint(100, screen_size.w - 100)
@@ -169,6 +177,18 @@ while not end:
     sprites.draw(screen)
     fires.draw(screen)
     aliens.draw(screen)
+
+    myfont = pygame.font.SysFont("", 25)
+
+    time_label = myfont.render(str(int(time.time() - start_time)), 1, blue)
+    points_label = myfont.render(str(points), 1, blue)
+    pos_label = myfont.render("%s : %s" % (player.rect.x, player.rect.y), 1, blue)
+    
+    screen.blit(time_label,   (0, 0))
+    screen.blit(points_label, (0,30))
+    screen.blit(pos_label, (0, 60))
+
+
     pygame.display.flip()
 
 pygame.quit()
