@@ -59,12 +59,14 @@ class Alien(pygame.sprite.Sprite):
         self.rect.x += dx
         self.rect.y += dy
 
+    def on_board(self, w, h):
+        return (0 < self.rect.x < w) and (0 < self.rect.y < h)
+
 
 class Fire(pygame.sprite.Sprite):
 
     def __init__(self, point, image):
         pygame.sprite.Sprite.__init__(self)
-
         self.image = pygame.image.load(image).convert()
 
         self.rect = self.image.get_rect()
@@ -76,33 +78,62 @@ class Fire(pygame.sprite.Sprite):
         
 
 class LaserFire(Fire):
-    def __init__(self, point):
+    def __init__(self, point, back=False):
         super(LaserFire, self).__init__(point, "fire.png")
+        self.back = back
 
     def move(self):
-        self.rect.y -= 5
+        if self.back:
+            self.rect.y += 5
+        else:
+            self.rect.y -= 5
 
 
 class PlasmaFire(Fire):
-    def __init__(self, point, left=True):
-        self.left = left
+    def __init__(self, point, left=True, back=False):
         super(PlasmaFire, self).__init__(point, "fire.png")
+
+        self.left = left
+        self.back = back
 
     def move(self):
         if self.left:
             self.rect.x -= 1
         else:
             self.rect.x += 1
-        self.rect.y -= 5
+
+        if self.back:
+            self.rect.y += 5
+        else:
+            self.rect.y -= 5
 
 
 class RandFire(Fire):
-    def __init__(self, point):
+    def __init__(self, point, back=False):
         super(RandFire, self).__init__(point, "fire.png")
+        self.back = back
 
     def move(self):
         self.rect.x += randint(-3, 3)
-        self.rect.y -= 5
+        if self.back:
+            self.rect.y += 5
+        else:
+            self.rect.y -= 5
+
+class BackRandFire(RandFire):
+    def __init__(self, point):
+        super(BackRandFire, self).__init__((point.x, point.y + 40), back=True)
+
+class SideFire(Fire):
+    def __init__(self, point, left=True, back=False):
+        super(SideFire, self).__init__((point.x - 20, point.y), "fire.png")
+        self.left = left
+
+    def move(self):
+        if self.left:
+            self.rect.x -= 5
+        else:
+            self.rect.x += 5
 
 
 
@@ -129,7 +160,7 @@ def random_color():
 
 pygame.init()
 screen = pygame.display.set_mode(screen_size)
-pygame.display.set_caption('pyrace')
+pygame.display.set_caption('space')
 
 
 
@@ -154,12 +185,15 @@ moves = {pygame.K_LEFT: (player.move, -10, 0),
 
 fire_keys = {pygame.K_z: LaserFire,
              pygame.K_x: PlasmaFire,
-             pygame.K_c: RandFire}
+             pygame.K_c: RandFire,
+             pygame.K_v: BackRandFire,
+             pygame.K_b: SideFire}
 
 pygame.key.set_repeat(5, 5)
 
 
 fires = pygame.sprite.Group()
+alien_fires = pygame.sprite.Group()
 aliens = pygame.sprite.Group()
 bonus = pygame.sprite.Group()
 
@@ -170,18 +204,24 @@ killed = 0
 points = 0
 life = 5
 start_time = time.time()
+ammo = 20
+cycles = 0
+
+
 
 def set_labels():
 
-    myfont = pygame.font.SysFont("", 25)
+    myfont = pygame.font.SysFont("", 21)
 
-    title = ["time: %s"    % int(time.time() - start_time),
+    title = ["cycles: %s"  % cycles,
+             "time: %s"    % int(time.time() - start_time),
              "fire: %s"    % len(fires),
              "enemies: %s" % len(aliens),
              "%s : %s"     % (player.rect.x, player.rect.y),
              "killed: %s"  % killed,
              "points: %s"  % points,
-             "life:  %s"   % life
+             "life:  %s"   % life,
+             "ammo: %s"    % ammo,
             ]
 
     pos = 0
@@ -192,6 +232,7 @@ def set_labels():
 
 def event_handle():
 
+    global ammo
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return True
@@ -201,13 +242,17 @@ def event_handle():
                 mv(x, y)
 
             if event.key in fire_keys:
+                if ammo <= 0:
+                    continue
+                ammo -= 2
+
                 p1 = Point(player.rect.x, player.rect.y - 5)
                 p2 = Point(player.rect.x + 38, player.rect.y - 5)
 
                 left_fire = fire_keys[event.key](p1)
 
-                if event.key == pygame.K_x:
-                    right_fire = fire_keys[event.key](p2, False)
+                if event.key == pygame.K_x or event.key == pygame.K_b:
+                    right_fire = fire_keys[event.key](p2, left=False)
                 else:
                     right_fire = fire_keys[event.key](p2)
 
@@ -229,9 +274,31 @@ def event_handle():
 
 sound = pygame.mixer.Sound("explosion.wav")
 
+game_map = Map([(50, 200), (150, 200), (250, 200), (350, 200), (450, 200),
+                (550, 200), (650, 200)],
+               [(400, 400), (500, 400)]
+              )
+
+
+def init_enemy(enemy_list):
+    for e in enemy_list:
+        aliens.add(Alien(e))
+
+def init_bonus(bonus_list):
+    for b in bonus_list:
+        bonus.add(Bonus(b))
+
+init_enemy(game_map.alien)
+init_bonus(game_map.bonus)
+
 while not end:
+    cycles += 1
     clock.tick(30)
     screen.fill(black)
+
+    if randint(1, 8) == 1:
+        if ammo <= 18:
+            ammo += 2
 
     to_del = []
     for f in fires:
@@ -244,6 +311,25 @@ while not end:
             killed += 1
             sound.play()
 
+    for d in to_del:
+        fires.remove(d)
+
+    to_del = []
+    for af in alien_fires:
+        if not af.on_board(*screen_size):
+            to_del.append(af)
+        af.move()
+
+        if sprite.spritecollide(af, sprites, False):
+            to_del.append(af)
+            life -= 1
+            sound.play()
+
+            player.move_to_pos(Point(300, 500))
+
+    for d in to_del:
+        alien_fires.remove(d)
+
     
     if pygame.sprite.spritecollide(player, bonus, True):
         points += 100
@@ -251,15 +337,31 @@ while not end:
     if pygame.sprite.spritecollide(player, aliens, False):
         life -= 1
         player.move_to_pos(Point(300, 500))
+        sound.play()
 
-            
+    for a in aliens:
+        if randint(1, 2) == 1:
+            x1 = randint(-5, 5)
+            y1 = randint(-5, 5)
+            a.move(x1, y1)
+            if not a.on_board(*screen_size):
+                a.move(-x1, -y1)
 
-    for d in to_del:
-        fires.remove(d)
+        if randint(1, 100) == 1:
+
+                p1 = Point(a.rect.x,            a.rect.y + a.rect.w + 5)
+                p2 = Point(a.rect.x + a.rect.w - 10, a.rect.y + a.rect.w + 5)
+
+                left_fire = RandFire(p1, back=True)
+                right_fire = RandFire(p2, back=True)
+
+                alien_fires.add(left_fire)
+                alien_fires.add(right_fire)
+
 
     end = event_handle()
 
-    for s in sprites, fires, aliens, bonus:
+    for s in sprites, fires, aliens, bonus, alien_fires:
         s.draw(screen)
     
     set_labels()
