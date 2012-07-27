@@ -32,16 +32,46 @@ class Spaceship(pygame.sprite.Sprite):
 
 class Fire(pygame.sprite.Sprite):
 
-    def __init__(self, point):
+    def __init__(self, point, image):
         pygame.sprite.Sprite.__init__(self)
 
-        self.image = pygame.image.load("fire.png").convert()
+        self.image = pygame.image.load(image).convert()
 
         self.rect = self.image.get_rect()
         self.rect.x, self.rect.y = point
 
+        
+
+class LaserFire(Fire):
+    def __init__(self, point):
+        super(LaserFire, self).__init__(point, "fire.png")
+
     def move(self):
         self.rect.y -= 5
+
+
+class PlasmaFire(Fire):
+    def __init__(self, point, left=True):
+        self.left = left
+        super(PlasmaFire, self).__init__(point, "fire.png")
+
+    def move(self):
+        if self.left:
+            self.rect.x -= 1
+        else:
+            self.rect.x += 1
+        self.rect.y -= 5
+
+
+class RandFire(Fire):
+    def __init__(self, point):
+        super(RandFire, self).__init__(point, "fire.png")
+
+    def move(self):
+        self.rect.x += randint(-2, 2)
+        self.rect.y -= 5
+
+
 
 
 def random_color():
@@ -73,7 +103,7 @@ moves = {pygame.K_LEFT: (player.move, -10, 0),
          pygame.K_DOWN: (player.move, 0, 10)
          }
 
-pygame.key.set_repeat(3, 3)
+pygame.key.set_repeat(5, 5)
 
 
 fires = pygame.sprite.RenderPlain()
@@ -94,12 +124,22 @@ while not end:
                 mv, x, y = moves[event.key]
                 mv(x, y)
             elif event.key == pygame.K_SPACE:
-                left_fire  = Fire(Point(player.rect.x, player.rect.y - 20))
-                right_fire = Fire(Point(player.rect.x + 20, player.rect.y - 20))
+                left_fire  = LaserFire(Point(player.rect.x, player.rect.y - 5))
+                right_fire = LaserFire(Point(player.rect.x + 38, player.rect.y - 5))
                 fires.add(left_fire)
                 fires.add(right_fire)
 
+            elif event.key == pygame.K_z:
+                left_fire  = PlasmaFire(Point(player.rect.x, player.rect.y - 5))
+                right_fire = PlasmaFire(Point(player.rect.x + 38, player.rect.y - 5), False)
+                fires.add(left_fire)
+                fires.add(right_fire)
         
+            elif event.key == pygame.K_x:
+                left_fire  = RandFire(Point(player.rect.x, player.rect.y - 5))
+                right_fire = RandFire(Point(player.rect.x + 38, player.rect.y - 5))
+                fires.add(left_fire)
+                fires.add(right_fire)
             
 
 
