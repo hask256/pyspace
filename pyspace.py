@@ -1,7 +1,8 @@
 import pygame
 from pygame import sprite
 import time
-from random import randint
+from random import randint, sample
+import math
 
 from collections import namedtuple
 Point = namedtuple('Point', 'x y')
@@ -58,6 +59,9 @@ class Alien(pygame.sprite.Sprite):
     def move(self, dx, dy):
         self.rect.x += dx
         self.rect.y += dy
+
+    def move_down(self):
+        self.rect.y += randint(1, 2)
 
     def on_board(self, w, h):
         return (0 < self.rect.x < w) and (0 < self.rect.y < h)
@@ -135,8 +139,19 @@ class SideFire(Fire):
         else:
             self.rect.x += 5
 
+class ArmaggedonPlasma(Fire):
+    def __init__(self, point, angle):
+        super(ArmaggedonPlasma, self).__init__(point, "plasma.png")
+        self.point = point
+        self.angle = angle
+        self.r = 0
 
-
+    def move(self):
+        self.r += 1
+        fi = math.radians(self.angle)
+        self.rect.x = self.r * math.cos(fi) + self.point.x
+        self.rect.y = self.r * math.sin(fi) + self.point.y
+        
 class Bonus(pygame.sprite.Sprite):
 
     def __init__(self, point):
@@ -151,6 +166,27 @@ class Map(object):
     def __init__(self, alien, bonus):
         self.alien = alien
         self.bonus = bonus
+
+
+class MapGenerator(object):
+    def __init__(self, n):
+        self.alien = []
+        start_y = 300
+        pos_x = range(40, 720, 40)
+        for i in xrange(n):
+            k = randint(1, 5)
+            line = sample(pos_x, k)
+            for item in line:
+                self.alien.append((item, start_y))
+
+            start_y -= randint(100, 200)
+
+    
+
+
+                
+
+        
         
     
 def random_color():
@@ -187,12 +223,14 @@ fire_keys = {pygame.K_z: LaserFire,
              pygame.K_x: PlasmaFire,
              pygame.K_c: RandFire,
              pygame.K_v: BackRandFire,
-             pygame.K_b: SideFire}
+             pygame.K_b: SideFire,
+             pygame.K_a: ArmaggedonPlasma}
 
 pygame.key.set_repeat(5, 5)
 
 
 fires = pygame.sprite.Group()
+plasma = pygame.sprite.Group()
 alien_fires = pygame.sprite.Group()
 aliens = pygame.sprite.Group()
 bonus = pygame.sprite.Group()
@@ -246,6 +284,13 @@ def event_handle():
                     continue
                 ammo -= 2
 
+                if event.key == pygame.K_a:
+                    p = Point(player.rect.centerx, player.rect.centery)
+                    for angle in range(0, 360+1, 7):
+                        plasma.add(ArmaggedonPlasma(p, angle))
+
+                    continue
+
                 p1 = Point(player.rect.x, player.rect.y - 5)
                 p2 = Point(player.rect.x + 38, player.rect.y - 5)
 
@@ -258,7 +303,6 @@ def event_handle():
 
                 fires.add(left_fire)
                 fires.add(right_fire)
-                points = len(fires)
                 
             if event.key == pygame.K_q:
                 x = randint(100, screen_size.w - 100)
@@ -274,8 +318,8 @@ def event_handle():
 
 sound = pygame.mixer.Sound("explosion.wav")
 
-game_map = Map([(50, 200), (150, 200), (250, 200), (350, 200), (450, 200),
-                (550, 200), (650, 200)],
+game_map = Map([(50, 200), (150, 200), (250, 200), (350, 200), (450, 200), (550, 200), (650, 200)],
+   
                [(400, 400), (500, 400)]
               )
 
@@ -288,7 +332,7 @@ def init_bonus(bonus_list):
     for b in bonus_list:
         bonus.add(Bonus(b))
 
-init_enemy(game_map.alien)
+init_enemy(MapGenerator(20).alien)
 init_bonus(game_map.bonus)
 
 while not end:
@@ -315,10 +359,13 @@ while not end:
         fires.remove(d)
 
     to_del = []
+
+    
     for af in alien_fires:
         if not af.on_board(*screen_size):
             to_del.append(af)
         af.move()
+
 
         if sprite.spritecollide(af, sprites, False):
             to_del.append(af)
@@ -330,16 +377,30 @@ while not end:
     for d in to_del:
         alien_fires.remove(d)
 
+    to_del = []
+    for pl in plasma:
+        if not pl.on_board(*screen_size):
+            to_del.append(pl)
+        pl.move()
+
+        if sprite.spritecollide(pl, alien_fires, True):
+            to_del.append(pl)
+            sound.play()
+
+    for d in to_del:
+        plasma.remove(d)
+
     
     if pygame.sprite.spritecollide(player, bonus, True):
         points += 100
 
-    if pygame.sprite.spritecollide(player, aliens, False):
+    if pygame.sprite.spritecollide(player, aliens, True):
         life -= 1
         player.move_to_pos(Point(300, 500))
         sound.play()
 
     for a in aliens:
+        a.move_down()
         if randint(1, 2) == 1:
             x1 = randint(-5, 5)
             y1 = randint(-5, 5)
@@ -361,7 +422,7 @@ while not end:
 
     end = event_handle()
 
-    for s in sprites, fires, aliens, bonus, alien_fires:
+    for s in sprites, fires, aliens, bonus, alien_fires, plasma:
         s.draw(screen)
     
     set_labels()
